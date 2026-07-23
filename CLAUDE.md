@@ -2,73 +2,136 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**This is the agent's always-true constitution**, derived from `docs/PROJECT_SCOPE.md` §§5–8.
+`docs/PROJECT_SCOPE.md` is the destination document (read at milestone boundaries / fork
+resolutions); this file is the subset that is true every session. **Nothing here may
+contradict the scope** — if reality changes, the scope is amended first, then this file.
+The backlog lives in `issues/` (one slice per file).
+
 ## Project Purpose
 
-`hubspot-intent-pipeline` (package: `intent-pipeline`) is a B2B intent-data pipeline and
-agentic orchestrator, part of the `Affiliate_Marketing_AI_Sys` project. It ingests raw
-signals (job-board postings), scores them for buyer intent, resolves decision-maker
-contacts, persists everything, and drafts rate-limited outreach.
+`intent-pipeline` (repo dir `hubspot-intent-pipeline`) is a **B2B Intent Data Pipeline &
+Agentic Orchestrator**. On a scheduled run it pulls public job postings, scores them for
+buyer intent against three HubSpot buyer profiles, enriches high-scoring leads with
+decision-maker contacts, persists everything in SQLite under a state machine, and drafts
+personalized outreach — delivering **at most 5 advisory email digests per day to the
+owner**, who retains sole send authority. Operated as "Client Zero" to drive affiliate
+revenue in the IT/SaaS niche; architected so the scoring layer can later become a
+commercial API. Pitch it as a production-grade intent data pipeline — never as an
+"affiliate marketing tool."
 
 ## Environment Setup
 
-Python ≥3.11 (dev venv is 3.14 at `.venv/`), `src/` layout, editable install:
+Python 3.11+ (dev venv is 3.14 at `.venv/`), `src/` layout, editable install:
 
 ```bash
 source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env        # then fill in secrets; NEVER commit .env
+cp .env.example .env        # fill in secrets; NEVER commit .env
 ```
 
 ## Common Commands
 
 ```bash
-pytest                      # run the suite (config in pyproject.toml; pythonpath=src)
+pytest                                                 # suite (pythonpath=src, config in pyproject.toml)
 pytest tests/test_smoke.py::test_dry_run_defaults_on   # a single test
-ruff check .                # lint (line-length 100, target py311)
-ruff format .               # format
+ruff check .                                           # lint (line-length 100, py311)
+ruff format .                                          # format
+python -m intent_pipeline --dry-run                    # (Phase 8) full L1→L4 dry run
 ```
 
-## Cost-Control Invariant (critical)
+## Hard Rules (Non-Negotiable — Scope §7)
 
-`DRY_RUN=true` is the default (`src/intent_pipeline/config.py`). **No layer may call a
-paid API (job board, Apollo, Anthropic) while `DRY_RUN` is on** — it must return
-deterministic mock data instead. `tests/test_smoke.py::test_dry_run_defaults_on` guards
-this. Two more gates: enrichment only runs for leads scoring ≥ `ENRICHMENT_SCORE_THRESHOLD`
-(0.85); the drafter sends at most `DAILY_EMAIL_LIMIT` (5) emails/day to `ADMIN_EMAIL`.
-All config comes from `.env` via pydantic-settings — secrets are never hard-coded.
+1. **DRY_RUN defaults ON** and is honored by every layer that touches network or money:
+   L1 fetch, L2.5 enrichment, L4 drafting and email. When on, return deterministic mock data.
+2. **Enrichment gate:** only leads with `intent_score > 0.85` may enrich; always cache-first;
+   **misses are cached too** (negative cache) — providers charge only when data is found.
+3. **≤ 5 advisory emails/day**, enforced **in the database** as a count of transitions to
+   `EMAILED_TO_ADMIN` per UTC day — never in memory (must survive restarts).
+4. **Human send authority:** the system NEVER emails a prospect. V1 delivers to the owner only.
+5. **Secrets live in `.env` (gitignored) only** — never in code, logs, or fixtures.
+6. **All timestamps UTC.**
+7. **`schemas.py` is the only source of truth.** Every layer imports it; schema-conformance
+   tests are written **before** implementation.
+8. **Vertical slices only.** Every session delivers one thin slice that runs end-to-end (on
+   mocks where needed), proven by a failing test turning green. One slice = one session =
+   one commit. Discoveries become issues, never mid-session detours.
 
-## Architecture — five decoupled layers
+## Architecture — Five Layers, One Contract (Scope §5)
 
-Data moves between layers only as `schemas.py` Pydantic models (the single source of
-truth for record shapes). Layers sit behind interfaces so concretes are swappable.
+Data moves between layers **only** as `schemas.py` Pydantic models. Each layer exposes one
+narrow interface (`base.py` ABC / the repository); internals are large and delegated.
+The owner designs boundaries; the agent fills bodies. No scattering logic into shallow files.
 
 ```
-L1 Ingestion → L2 Intelligence → L2.5 Enrichment → L3 Storage → L4 Orchestrator
+Adzuna API → L1 Ingestion → L3 raw store → L2 Scoring → L3 leads (state machine)
+                                                          │ score > 0.85
+                                                          ▼
+                                        L2.5 Enrichment (cache-first) → L3 contacts
+                                                          │
+                                                          ▼
+                    L4 Priority queue → LLM drafter → ≤5 advisory emails/day → Owner
 ```
 
-All modules under `src/intent_pipeline/` are currently **stub docstrings** — no layer
-logic is implemented yet.
+| Layer | Modules | Responsibility | Nature |
+|---|---|---|---|
+| **L1 Ingestion** | `ingestion/base.py`, `job_board.py` | `IngestionSource` ABC; fetch, pagination, rate-limit/backoff, DRY_RUN → fixtures | Volatile |
+| **L2 Intelligence** | `intelligence/profiles.py`, `scorer.py` | Buyer profiles A/B/C; raw text → `intent_score` + keywords via spaCy PhraseMatcher + firmographic rules. **Pure, no I/O** | Stateless |
+| **L2.5 Enrichment** | `enrichment/base.py`, `apollo.py`, `mock.py` | `EnrichmentProvider` ABC; company → contacts; threshold-gated, cache-first, misses cached | Gated |
+| **L3 Storage** | `storage/database.py`, `repository.py` | SQLite + repository hiding SQL behind a narrow API; **owns all state transitions** | Truth |
+| **L4 Orchestrator** | `orchestrator/queue.py`, `drafter.py` | Priority queue (`ORDER BY opportunity_score, created_at`); LLM drafter (Anthropic); daily cap; email | Agentic, capped |
+| **Contracts** | `schemas.py` | Pydantic models + status enum — imported by every layer | Binding |
 
-- **`schemas.py`** — Pydantic data contracts + status enums shared by all layers.
-- **`ingestion/`** (L1, volatile) — `base.py` `IngestionSource` interface (fetch raw
-  payloads, handle rate limits, return Raw records; no analysis); `job_board.py` concrete
-  source (API-first, swappable).
-- **`intelligence/`** (L2, stateless) — `scorer.py` reads raw text → `intent_score ∈ [0,1]`
-  + matched keywords (pure, no I/O); `profiles.py` buyer profiles A/B/C.
-- **`enrichment/`** (L2.5, identity resolution) — `base.py` `EnrichmentProvider` interface
-  (company → decision-maker contacts, cache-first, threshold-gated); `apollo.py` concrete.
-- **`storage/`** (L3, truth) — `database.py` SQLite engine/session; `repository.py` deep
-  module: narrow read/write API over the schemas, hides SQL.
-- **`orchestrator/`** (L4) — `queue.py` dynamic priority queue (ranks by opportunity
-  score); `drafter.py` LLM outreach drafter + daily rate limiter.
+**Buyer profiles (L2):** A "Spreadsheet Graduate" → HubSpot CRM Starter · B "Automation
+Seeker" → Marketing Hub · C "Ecosystem Upgrader" → Sales/Service Enterprise. Scoring is
+**rule-based** (F3): spaCy PhraseMatcher + firmographics. Rules generate the labels a future
+model would train on. Precision outweighs recall — every false positive burns an enrichment
+credit and one of five daily email slots.
 
-## Layout
+## Binding Contracts (Scope §6)
 
-`src/intent_pipeline/` (package), `tests/`, `data/{raw,processed}/` (local store, `*.db`
-and raw outputs gitignored), `docs/` (see `docs/ROADMAP.md` for the build plan),
-`notebooks/`, `scripts/`, `issues/`.
+`schemas.py` defines: **RawRecord** (raw ingestion), **ScoredLead** (processed lead),
+**Contact** (enrichment output) + an enrichment-attempt log (negative cache:
+`company_key, provider, attempted_at, result_count`). Notable `ScoredLead` fields:
+`intent_score` (0–1), `matched_profile` (A/B/C), `matched_keywords`, `opportunity_score`
+(**V1: alias of `intent_score`**, reserved for firmographic weighting — documented, not
+built), `tracking_code` (per-lead code in the draft CTA URL for click attribution),
+`outcome` (nullable SENT/CLICKED/CONVERTED/DEAD — owner-recorded), `status`.
 
-## Build Status
+**Lead state machine** — transitions happen **only** through repository methods; any other
+raises:
 
-Phase 1 (scaffold) complete; smoke tests pass. Next work is tracked in
-`docs/ROADMAP.md` — dependency-ordered phases starting with `schemas.py` (Phase 2).
+```
+UNPROCESSED ──▶ QUEUED ──▶ DRAFTED ──▶ EMAILED_TO_ADMIN   (terminal)
+     │             │
+     └──▶ REJECTED ◀┘                                      (terminal)
+```
+
+`EMAILED_TO_ADMIN` and `REJECTED` are terminal — a lead can never be double-processed.
+Enrichment is an attribute (a lead *has* contacts), not a status.
+
+## In / Out of Scope (V1 — Scope §8)
+
+**In:** API-keyed job-board ingestion (Adzuna primary) behind `IngestionSource`; rule-based
+NLP scoring vs. profiles A/B/C; threshold-gated, cache-first enrichment behind
+`EnrichmentProvider` (**mock acceptable for V1** — F2); SQLite + state machine; priority
+queue + LLM drafter; ≤5 advisory emails/day; DRY_RUN end-to-end; contract-enforcing tests.
+
+**Out:** sending anything to prospects; DOM/social scraping; landing pages (Phase 2);
+commercial API (Phase 3); multi-user/auth/dashboards; Alembic (F5); model-based scoring
+(F3); reselling any vendor's contact data (F7).
+
+## Build Status & Open Forks
+
+Phase 0 (hygiene) and Phase 1 (scaffold) complete; all `src/` modules are stub docstrings.
+Delivery plan is Scope §9; decision forks are Scope §10.
+
+- **F1 (dedup key) is OPEN and blocks Phase 2** — recommended resolution: `source_url`
+  unique on RawRecord + normalized `hash(company_name + job_title)` at the lead layer, which
+  requires adding `job_title` to RawRecord. Settle before writing `schemas.py`.
+- **F2 (enrichment provider):** Apollo is gated behind a paid plan — **interface + mock
+  through V1**; spike alternatives. The pattern (gating/caching/cost control) is the asset.
+- Decided: SQLite (F4), `create_all` not Alembic (F5), rules-based scoring (F3),
+  Anthropic + JSON drafter (F8), manual outcome capture (F9).
+
+Next slice: resolve F1, then Phase 2 `schemas.py` (conformance tests first).
