@@ -1,16 +1,24 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
+
+# Test / lint / tooling caches
 .pytest_cache/
 .ruff_cache/
-venv/
+
+# Virtual environments
 .venv/
+venv/
 env/
+
+# Secrets — NEVER commit
 .env
+
+# SQLite database (lives under data/, keep the dir via .gitkeep)
 data/*.db
-data/raw/*
-!data/raw/.gitkeep
-!data/.gitkeep
+
+# OS / editor cruft
 .DS_Store
 .idea/
 .vscode/

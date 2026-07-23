@@ -123,8 +123,11 @@ commercial API (Phase 3); multi-user/auth/dashboards; Alembic (F5); model-based 
 
 ## Build Status & Open Forks
 
-Phase 0 (hygiene) and Phase 1 (scaffold) complete; all `src/` modules are stub docstrings.
-Delivery plan is Scope §9; decision forks are Scope §10.
+Phase 0 (repo hygiene) complete as of this slice — clean working tree and a truthful
+constitution (Scope §9 Phase 0 / M1 exit criterion met); the decision ledger
+(`docs/DECISIONS.md`) is seeded. Scaffold and tooling are in place; all `src/` modules are
+stub docstrings. Phase 2 (`schemas.py`) has not started. Delivery plan is Scope §9;
+decision forks are Scope §10.
 
 - **F1 (dedup key) is OPEN and blocks Phase 2** — recommended resolution: `source_url`
   unique on RawRecord + normalized `hash(company_name + job_title)` at the lead layer, which
