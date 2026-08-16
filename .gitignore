@@ -22,3 +22,14 @@ data/*.db
 .DS_Store
 .idea/
 .vscode/
+
+# Local-only project documents — governance/planning, kept on disk, not pushed.
+# README.md stays tracked (Definition of Done §4: clean-clone quickstart).
+/docs/
+CLAUDE.md
+
+# Claude Code / agent artifacts — local only ("anything related to claude")
+.claude/
+CLAUDE.local.md
+.claude.json
+.mcp.json

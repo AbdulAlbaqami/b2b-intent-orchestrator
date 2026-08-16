@@ -64,3 +64,25 @@ Entry format:
 - Revisit trigger: Spike results; budget decision (§10 F2).
 - Interview line: "When my enrichment vendor's pricing changed mid-project, the swap cost one
   file, because the boundary was mine and the vendor was replaceable." (§14)
+
+### ADR-004 — Cost-control thresholds are code, not configuration (Hard Rules 2 & 3)
+- Date: 2026-08-16
+- Decision: The enrichment gate (`intent_score > 0.85`, Hard Rule 2) and the daily email cap
+  (5/day, Hard Rule 3) are defined as constants in code — a future `config.py`, given the same
+  treatment as the `opportunity_score` extension point — not as `.env` variables. Removed
+  `ENRICHMENT_SCORE_THRESHOLD` and `DAILY_EMAIL_LIMIT` from `.env.example`.
+- Alternatives rejected: sourcing them from `.env` (as the Phase-0 scaffold initially did).
+- Why / tradeoff: These values are contract, not environment. In `.env`, a typo silently
+  disables a business rule the test suite is meant to guarantee, and the Phase 6 exit criterion
+  "the gate provably blocks <0.85" becomes true only in the one environment it was run in.
+  `DRY_RUN`, `DATABASE_PATH`, and secrets are genuine deployment settings and stay in `.env`;
+  contract thresholds do not. Cost of the change: one constant plus a comment marking the
+  firmographic-weighting extension point.
+- Revisit trigger: A real need to tune a threshold per-deployment without a code change (e.g.
+  multi-tenant / Phase 3) — at which point it becomes validated configuration, not a bare env var.
+- Interview line: "Cost-control thresholds are code, not configuration — they're contract, so a
+  typo can't silently disable a business rule my tests are supposed to guarantee."
+- Next-session instruction: when `config.py` is created (L2.5 / L4 slices), add
+  `ENRICHMENT_SCORE_THRESHOLD = 0.85` and `DAILY_EMAIL_LIMIT = 5` as constants, and reconcile
+  the `enrichment/apollo.py` and `orchestrator/drafter.py` stub docstrings that currently name
+  them as env vars.
