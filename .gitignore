@@ -28,6 +28,10 @@ data/*.db
 /docs/
 CLAUDE.md
 
+# Per-session learning primers/debriefs — disposable scaffolding for the concept
+# vault, not project truth. Sessions are independent; repeats are expected.
+learning/
+
 # Claude Code / agent artifacts — local only ("anything related to claude")
 .claude/
 CLAUDE.local.md
