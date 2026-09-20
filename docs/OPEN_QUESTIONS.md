@@ -28,6 +28,7 @@
 | Q8 | **F1 dedup key decision** | FORK (open) | Recommendation is written in §10. Owner answers yes / no / modify — one line | **YES — blocks Phase 2** | Today |
 | Q9 | De-risk spike: Adzuna account + one real JSON saved as fixture | DESIGN | 60–90 min, non-coding. Also confirms the F2 fallback landscape | **YES — soft-blocks Phase 3** | This week |
 | Q10 | Learn basics first, or build first? | SETTLED | Build first; learn anchored in AFK blocks (§2 objective 3, §11). Concrete code cures abstract overwhelm | No | — |
+| Q11 | Runtime: Python 3.14 vs 3.13 — spaCy wheel/load verification | DESIGN | **Verified OK on Python 3.14.2 (2026-08-16).** The prior `spacy download` failure was a missing `click` dependency, not a wheel/Python incompatibility; installing `click` fixed it. `import spacy` + `PhraseMatcher` import, and `en_core_web_sm` 3.8.0 downloads and `spacy.load`s cleanly. No venv rebuild to 3.13 needed. Re-open only if a spaCy/model load fails on 3.14 later | No | — |
 
 ---
 

@@ -1,11 +1,12 @@
 # Intent Pipeline — Unified Project Scope (V1)
 
 **Full name:** B2B Intent Data Pipeline & Agentic Orchestrator
-**Repo:** `intent-pipeline` (private GitHub) · **Stack:** Python 3.11+, venv/pip, setuptools src layout, Pydantic, spaCy, SQLite
-**Version:** 1.2 · **Date:** 2026-07-11 · **Status:** DRAFT until owner sign-off, then LOCKED
+**Repo:** `b2b-intent-orchestrator` (private GitHub) · **Package:** `intent_pipeline` · **Stack:** Python 3.11+, venv/pip, setuptools src layout, Pydantic, spaCy, SQLite
+**Version:** 1.3 · **Date:** 2026-08-16 · **Status:** DRAFT until owner sign-off, then LOCKED
 **Supersedes:** "HubSpot Intent Matching Pipeline: V1 Architecture & Schema" (**Scope A**) and "Project Scope: B2B Intent Data Pipeline & Agentic Orchestrator" (**Scope B**). Both are retired to `docs/archive/` on sign-off.
 **v1.1 changes:** added the Phase-1 value loop (§2), `tracking_code` + `outcome` fields (§6.2), vertical-slice hard rule (§7.8), fork F9 outcome capture (§10), outreach-compliance risk (§12).
 **v1.2 changes:** added fork F10 (geographic scope — US-only V1 default).
+**v1.3 changes:** repo renamed `intent-pipeline` → `b2b-intent-orchestrator` (Python package stays `intent_pipeline`); F1 (dedup key) resolved as (a)+(b). Both recorded in `docs/DECISIONS.md` (ADR-008, ADR-005).
 
 ---
 
@@ -75,7 +76,7 @@ Owner sends ──▶ prospect clicks tracked link ──▶ profile comparison 
 
 ## 6. Binding Contracts
 
-Schemas are contracts from day one. Schema-conformance tests are written **before** any implementation. Fields marked ⚑ depend on fork F1 (open).
+Schemas are contracts from day one. Schema-conformance tests are written **before** any implementation. Fields marked ⚑ were settled by fork F1 (resolved 2026-08-16, ADR-005): `source_url` is UNIQUE on RawRecord; `job_title` is a required field feeding the normalized lead-level dedup hash.
 
 ### 6.1 RawRecord (raw ingestion)
 
@@ -84,9 +85,9 @@ Schemas are contracts from day one. Schema-conformance tests are written **befor
 | `raw_id` | UUID | Primary key |
 | `scraped_at` | Timestamp (UTC) | Time of capture |
 | `source_type` | String | Default `"JOB_BOARD"` — future-proofing |
-| `source_url` | String | Origin URL ⚑ candidate uniqueness key |
+| `source_url` | String | Origin URL — ⚑ UNIQUE (ingestion idempotency, per F1/ADR-005) |
 | `company_name` | String | Extracted entity name |
-| `job_title` | String ⚑ | Pending F1 — required if dedup uses company+title hash |
+| `job_title` | String | ⚑ Required — feeds normalized `hash(company_name+job_title)` lead dedup (F1/ADR-005) |
 | `raw_text_payload` | Text | Full unedited posting text |
 
 ### 6.2 ScoredLead (processed lead)
@@ -168,7 +169,7 @@ Every known point where the road can split. Defaults are chosen; each fork recor
 
 | # | Fork | Options | V1 default | Revisit trigger | Status |
 |---|---|---|---|---|---|
-| F1 | **Dedup key** — what makes two postings the same lead? | (a) unique `source_url` only; (b) add `job_title`, dedup on hash(company+title); (c) hash of full payload | **Recommended: (a)+(b)** — `source_url` unique on RawRecord, content-hash on lead for cross-board dupes | First real duplicate observed | **OPEN — blocks Phase 2** |
+| F1 | **Dedup key** — what makes two postings the same lead? | (a) unique `source_url` only; (b) add `job_title`, dedup on hash(company+title); (c) hash of full payload | **(a)+(b)** — `source_url` unique on RawRecord, normalized `hash(company_name+job_title)` on lead for cross-board dupes | First real duplicate observed | **Resolved 2026-08-16 (ADR-005)** |
 | F2 | **Enrichment provider** — Apollo API is gated behind Organization plan (~$119/user/mo, 3-seat min); free tier ~100 credits, ToS forbids external resale | (a) mock-only V1; (b) alternative free-tier provider (Hunter et al. — verify in spike); (c) pay | **Interface + mock through V1;** spike alternatives | Spike results; budget decision | Spike pending |
 | F3 | **Scoring method** | rules → weighted rules → trained model | **Rules** (spaCy PhraseMatcher + firmographics). Rules generate the labels a future model trains on | ~100+ labeled outcomes exist | Decided |
 | F4 | **Storage engine** | SQLite → Postgres | **SQLite** | Concurrent writers, deployment, or multi-tenant | Decided |
@@ -179,7 +180,7 @@ Every known point where the road can split. Defaults are chosen; each fork recor
 | F9 | **Outcome capture** — how does a click or conversion get back onto the lead? | manual recording by owner → redirect/click-logging service → affiliate-network reporting pull | **Manual in V1** — owner updates `outcome` | Phase 2 landing pages live | Decided |
 | F10 | **Geographic scope** — which market does V1 target? | US-only → add UK/EU → multi-region | **US-only V1** — Adzuna is per-country, spaCy `en` pipeline, owner's compliance context is US (CAN-SPAM) | V1 loop proven; Phase 3 market decision | Decided — confirm at sign-off |
 
-**Live forks in words.** *F1* is the only decision blocking the next coding session: recommendation is `source_url` uniqueness at the raw layer plus a normalized `hash(company_name + job_title)` at the lead layer, which requires adding `job_title` to RawRecord — ten seconds now versus a migration later. *F2* is the wall found on 2026-07-11: the architecture already absorbs it because L2.5 is an interface, and a mock-only V1 loses zero portfolio value — the pattern (gating, caching, cost control) is the asset, not the vendor.
+**Live forks in words.** *F1* is **resolved (2026-08-16, ADR-005)** as `source_url` uniqueness at the raw layer plus a normalized `hash(company_name + job_title)` at the lead layer, which requires adding `job_title` to RawRecord — ten seconds now versus a migration later. Frequency capping is deliberately left out of the hash: it is a Phase-7 queue rule, not a schema field. *F2* is the wall found on 2026-07-11: the architecture already absorbs it because L2.5 is an interface, and a mock-only V1 loses zero portfolio value — the pattern (gating, caching, cost control) is the asset, not the vendor.
 
 ## 11. Learning Curve Map — First-Big-Project Edition
 

@@ -1,4 +1,6 @@
-# Intent Pipeline
+# B2B Intent Orchestrator
+
+*Status: early development — architecture and tooling in place; layer implementations in progress (see [Status](#status)).*
 
 **B2B Intent Data Pipeline & Agentic Orchestrator** — a production-grade Python pipeline
 that turns public hiring signals into ranked, enriched, outreach-ready opportunities under
@@ -49,24 +51,48 @@ Adzuna API → L1 Ingestion → L3 raw store → L2 Scoring → L3 leads (state 
 
 ## Quickstart
 
+Requires **Python 3.11+**. Everything below runs offline: `DRY_RUN` defaults ON, so no paid
+API is called and no email is sent until you explicitly turn it off.
+
 ```bash
-python -m venv .venv && source .venv/bin/activate   # Windows: .\.venv\Scripts\activate
-pip install -e ".[dev]"
-cp .env.example .env                                # then fill in secrets — NEVER commit .env
-pytest
+git clone <repo-url>
+cd b2b-intent-orchestrator
+python -m venv .venv && source .venv/bin/activate    # Windows: .\.venv\Scripts\activate
+pip install -e ".[dev]"                              # editable install + dev tools
+cp .env.example .env                                 # configure — see below
+pytest                                               # contract + smoke tests should pass
 ```
 
-Stack: Python 3.11+ · setuptools `src/` layout · Pydantic v2 · spaCy · SQLite.
+The full end-to-end dry run — `python -m intent_pipeline --dry-run`, exercising L1→L4 on
+mock data — is the Phase 8 deliverable and is not wired up yet (see **Status**).
 
-## Project docs
+## Configuration
 
-- **`docs/PROJECT_SCOPE.md`** — the locked destination document (vision, architecture,
-  binding contracts, hard rules, delivery plan, decision forks).
-- **`CLAUDE.md`** — the always-true constitution for AI-agent implementation, derived from
-  the scope.
-- **`issues/`** — the backlog, one slice per file.
+Copy `.env.example` to `.env` and fill in the values you need. Only `.env.example` (blank
+placeholders) is committed — **your real `.env` is gitignored and never enters the repo.**
+In the default `DRY_RUN=true` mode every value may stay blank; real keys are only required
+to run live.
+
+| Variable | Purpose |
+|---|---|
+| `DRY_RUN` | `true` (default) → mock data, no network or paid API, no email sent |
+| `DATABASE_PATH` | SQLite database file location (e.g. `data/intent_pipeline.db`) |
+| `ADMIN_EMAIL` | Address the advisory digests are delivered to |
+| `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | Adzuna job-board API credentials (L1) |
+| `APOLLO_API_KEY` | Enrichment provider key (L2.5) — optional; V1 ships a mock provider |
+| `ANTHROPIC_API_KEY` | LLM drafter (L4) |
+
+The business thresholds — the `> 0.85` enrichment gate and the 5-emails/day cap — are
+deliberately **not** environment settings. They are contract, defined as constants in code,
+so a typo can't silently disable a rule the test suite is meant to guarantee.
+
+## Tech stack
+
+Python 3.11+ · setuptools `src/` layout · Pydantic v2 · spaCy · SQLite · Anthropic API.
 
 ## Status
 
-Scaffold complete (Phases 0–1); all layer modules are stubs. Next: resolve the dedup-key
-fork (F1), then implement `schemas.py` (Phase 2). Full delivery plan in `docs/PROJECT_SCOPE.md` §9.
+Early development. The project scaffold and tooling are in place; all layer modules are
+stubs pending the binding schema contract. Next up: `schemas.py` (Pydantic models + the lead
+state machine), then the layers built in dependency order, L1 → L4, one vertical slice at a
+time.

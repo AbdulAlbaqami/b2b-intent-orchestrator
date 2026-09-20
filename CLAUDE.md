@@ -57,6 +57,25 @@ python -m intent_pipeline --dry-run                    # (Phase 8) full L1→L4 
    mocks where needed), proven by a failing test turning green. One slice = one session =
    one commit. Discoveries become issues, never mid-session detours.
 
+## Working Rules (How We Operate)
+
+- **Context hygiene:** `/clear` and reload from disk between slices; never `/compact`. The urge
+  to compact mid-slice means the slice is too big — split it.
+- **Reload from disk:** at session start, reconstruct state from `CLAUDE.md` + `docs/HANDOFF.md`
+  + the active `issues/` file + the relevant code — never from a compacted summary. Verify the
+  handoff against `git status` before trusting it.
+- **One job per file:** every file holds exactly ONE kind of information (destination →
+  `PROJECT_SCOPE.md` · decided → `DECISIONS.md` · unresolved → `OPEN_QUESTIONS.md` · next →
+  `issues/` · always-true → `CLAUDE.md` · current-frontier → `HANDOFF.md`). No file mixes
+  decisions, state, logs, and output. If a doc grows past a few screens, it holds too many jobs —
+  split it.
+- **No logs in markdown:** run output, test results, and transcripts go to the terminal or
+  gitignored log files — never into a tracked `.md`.
+- **Version control is delegated (ADR-009):** the agent stages **explicit paths** (never
+  `git add -A`), commits one slice at a time with a labeled message, and pushes when a remote
+  exists. Never force-push, never rewrite pushed history, never stage `.env` or secrets.
+  Destructive git (`reset --hard`, `clean -fd`, branch deletion) asks the owner first.
+
 ## Architecture — Five Layers, One Contract (Scope §5)
 
 Data moves between layers **only** as `schemas.py` Pydantic models. Each layer exposes one
