@@ -23,10 +23,11 @@ data/*.db
 .idea/
 .vscode/
 
-# Local-only project documents — governance/planning, kept on disk, not pushed.
-# README.md stays tracked (Definition of Done §4: clean-clone quickstart).
+# Local-only project documents — governance, planning, and the issues/ backlog stay on
+# the owner's disk, not in the repo (ADR-010). The only tracked docs are CLAUDE.md (the
+# agent's constitution) and README.md (Definition of Done §4: clean-clone quickstart).
 /docs/
-CLAUDE.md
+/issues/
 
 # Per-session learning primers/debriefs — disposable scaffolding for the concept
 # vault, not project truth. Sessions are independent; repeats are expected.
